@@ -217,15 +217,12 @@ intrinsic EvaluateSumOfPolynomialAtRootsOfOtherPolynomial(
     n := Degree(roots_poly);
     Q := PolynomialRing(K, n);
     sym_poly := ComputeSum([hom<P->Q | Q.i>(poly) : i in [1..n]]);
-    print sym_poly;
 
     check, sym_poly_Q := IsSymmetric(sym_poly);
     assert check;
-    print sym_poly_Q;
 
     si := [(-1)^i * Coefficient(roots_poly, n - i) / Coefficient(roots_poly, n)
         : i in [1..n]];
-    print si;
     return hom<Q->K | si>(sym_poly_Q);
 end intrinsic;
 
