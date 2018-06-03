@@ -66,6 +66,19 @@ intrinsic Intersection(sets::SeqEnum) -> SetEnum
 end intrinsic;
 
 
+intrinsic Concatenate(seqs::SeqEnum) -> SeqEnum
+    { Given a sequence 'seqs' of sequences, concatenate all the sequences. }
+    if #seqs eq 0 then
+        return [];
+    end if;
+    big_seq := [];
+    for seq in seqs do
+        big_seq cat:= seq;
+    end for;
+    return big_seq;
+end intrinsic;
+
+
 intrinsic ComputeTorsionPointsOnJacobian(f::RngUPolElt) -> SeqEnum
     { Computes the torsion points on the Jacobian of the curve y^2 = f(x).
     Doesn't require f(x) to have integral coefficients though, as we map through
@@ -191,6 +204,29 @@ intrinsic EvaluatePolynomialAtRootsOfOtherPolynomial(
     // poly(a1) * .. * poly(an).
     // Note that Magma uses the convention that Resultant(x-a, x-b) = a - b.
     return resultant / LeadingCoefficient(roots_poly)^Degree(poly);
+end intrinsic;
+
+
+intrinsic EvaluateSumOfPolynomialAtRootsOfOtherPolynomial(
+    poly::RngUPolElt, roots_poly::RngUPolElt) -> RngElt
+    { Let a1, .., an be the roots of roots_poly. This function computes poly(a1)
+    + .. + poly(an). }
+    P := Parent(poly);
+    K := CoefficientRing(P);
+    // We need as many symmetric variables as we have roots for roots_poly.
+    n := Degree(roots_poly);
+    Q := PolynomialRing(K, n);
+    sym_poly := ComputeSum([hom<P->Q | Q.i>(poly) : i in [1..n]]);
+    print sym_poly;
+
+    check, sym_poly_Q := IsSymmetric(sym_poly);
+    assert check;
+    print sym_poly_Q;
+
+    si := [(-1)^i * Coefficient(roots_poly, n - i) / Coefficient(roots_poly, n)
+        : i in [1..n]];
+    print si;
+    return hom<Q->K | si>(sym_poly_Q);
 end intrinsic;
 
 
@@ -795,7 +831,10 @@ end intrinsic;
 
 
 intrinsic IgusaInvariantsAreEqual(inv1::SeqEnum, inv2::SeqEnum) -> Bool
-    { Returns whether or not the two Igusa invariants are equal. }
+    { Returns whether or not the two Igusa invariants are equal over the
+    algebraic closure. We use the weighted projective space with weights 1, 2,
+    3, 4, 5 rather than 2, 4, 6, 8, 10. This makes sense over the algebraic
+    closure. }
     WP := WeightedProjectiveSpace(Rationals(), [1,2,3,4,5]);
     return (WP!inv1) eq (WP!inv2);
 end intrinsic;
@@ -803,20 +842,40 @@ end intrinsic;
 
 intrinsic IgusaInvariants(f::RngUPolElt, twist::RngElt) -> SeqEnum
     { Returns the Igusa invariants of y^2 = f(x), scaled by twist. The space is
-    weighted with weights 1, 2, 3, 4, 5. }
+    weighted with weights 2, 4, 6, 8, 10. }
     invariants := IgusaInvariants(f);
-    weights := [1, 2, 3, 4, 5];
+    weights := [2, 4, 6, 8, 10];
     return [invariants[i] * twist^weights[i] : i in [1..5]];
 end intrinsic;
 
 
-intrinsic IgusaInvariantsNormalised(f::RngUPolElt) -> SeqEnum
-    { Returns the Igusa invariants of y^2 = f(x), scaled so that the first
-    entry is 1, if it is nonzero. The space is weighted with weights 1, 2, 3, 4,
-    5. }
+intrinsic IgusaInvariantsNormalisedGeometrically(f::RngUPolElt) -> SeqEnum
+    { Returns the Igusa invariants of y^2 = f(x), scaled so that the first entry
+    is 1, if it is nonzero. The space is weighted with weights 2, 4, 6, 8, 10.
+    In scaling by d^k rather than d^2k, we are assuming we are working over a
+    field where d is square. This makes sense over the algebraic closure. }
     invariants := IgusaInvariants(f);
     twist := invariants[1];
     weights := [1, 2, 3, 4, 5];
+    if twist ne 0 then
+        return [invariants[i] / twist^weights[i] : i in [1..5]];
+    else
+        return invariants;
+    end if;
+end intrinsic;
+    
+
+
+intrinsic IgusaInvariantsNormalised(f::RngUPolElt) -> SeqEnum
+    { Returns the Igusa invariants of y^2 = f(x), scaled so that the first entry
+    is factored modulo squares, if it is nonzero. The space is weighted with
+    weights 2, 4, 6, 8, 10. }
+    invariants := IgusaInvariants(f);
+    twist_mod_squares :=
+        FactorModSquares(NumeratorTimesDenominator(invariants[1]));
+    check, twist := IsSquare(invariants[1] / Product(twist_mod_squares));
+    assert check;
+    weights := [2, 4, 6, 8, 10];
     if twist ne 0 then
         return [invariants[i] / twist^weights[i] : i in [1..5]];
     else
@@ -835,3 +894,7 @@ intrinsic IsGeometricallyIsomorphic(f1::RngUPolElt, f2::RngUPolElt) -> Bool
 end intrinsic;
 
 
+intrinsic MaxDegreeOfFactor(poly::RngUPolElt) -> RngIntElt
+    { Computes the maximum degree of an irreducible factor of poly. }
+    return Max([Degree(factor[1]) : factor in Factorisation(poly)]);
+end intrinsic;
