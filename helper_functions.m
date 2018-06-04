@@ -893,5 +893,23 @@ end intrinsic;
 
 intrinsic MaxDegreeOfFactor(poly::RngUPolElt) -> RngIntElt
     { Computes the maximum degree of an irreducible factor of poly. }
+    if poly eq 0 then
+        return 0;
+    end if;
     return Max([Degree(factor[1]) : factor in Factorisation(poly)]);
+end intrinsic;
+
+
+intrinsic PrintOneLine(seq::SeqEnum)
+    { A procedure to print out a list all on one line. }
+    n := #seq;
+    printf "[";
+    for i in [1..n] do
+        printf "%o", seq[i];
+        if i eq n then
+            printf "]\n";
+        else
+            printf ", ";
+        end if;
+    end for;
 end intrinsic;
