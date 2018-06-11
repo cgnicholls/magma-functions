@@ -80,9 +80,8 @@ end intrinsic;
 
 
 intrinsic ComputeTorsionPointsOnJacobian(f::RngUPolElt) -> SeqEnum
-    { Computes the torsion points on the Jacobian of the curve y^2 = f(x).
-    Doesn't require f(x) to have integral coefficients though, as we map through
-    IntegralModel. }
+{ Computes the torsion points on the Jacobian of the curve y^2 = f(x).
+f(x) can have non-integral coefficients, as we map through IntegralModel. }
 
     lcm := LCM([Denominator(coeff) : coeff in Coefficients(f)]);
 
@@ -99,9 +98,8 @@ end intrinsic;
 
 
 intrinsic ComputeTorsionSubgroupOfJacobian(f::RngUPolElt) -> SeqEnum
-    { Computes the torsion subgroup of the Jacobian of the curve y^2 = f(x).
-    Doesn't require f(x) to have integral coefficients though, as we map through
-    IntegralModel. }
+{ Computes the torsion subgroup of the Jacobian of the curve y^2 = f(x).
+f(x) can have non-integral coefficients, as we map through IntegralModel. }
 
     lcm := LCM([Denominator(coeff) : coeff in Coefficients(f)]);
 
@@ -112,28 +110,54 @@ intrinsic ComputeTorsionSubgroupOfJacobian(f::RngUPolElt) -> SeqEnum
 end intrinsic;
 
 
-intrinsic ImageInSubgroup(the_map::UserProgram, elts::SetIndx, gp::.) ->
-    [ ], [ ]
-    { Computes the image of elts under the_map in gp. Returns the elements in
-    elts that are used to generate the image. The number of returned elements is
-    thus the number of generators of the subgroup of the image. If the group has
-    elements of composite order, we may return more elements, however. }
-    used_elts := [];
-    used_imgs := [];
-    num_errors := 0;
+intrinsic IndicesGeneratingSubgroup(elts::SeqEnum, gp::GrpAb : start_with := []) -> SeqEnum
+{ Given some elements of a group that generate a subgroup subgp of gp, we
+return the indices required to generate that group. }
+    subgp := sub<gp | start_with cat elts>;
+    used_indices := [];
+    for i in [1..#elts] do
+        elt := elts[i];
+        if not elt in sub<gp | start_with cat elts[used_indices]> then
+            Append(~used_indices, i);
+        end if;
+        if sub<gp | start_with cat elts[used_indices]> eq subgp then
+            break;
+        end if;
+    end for;
+    return used_indices;
+end intrinsic;
+
+
+intrinsic ImageInSubgroup(the_map::UserProgram, elts::SetIndx, gp::GrpAb :
+    start_with := []) ->
+SeqEnum, SeqEnum, SeqEnum
+{ Computes the image of elts under the_map in gp. Returns just the elements
+we needed to use to generate the subgroup. Note that if the order of the
+group is composite, then our generating set need not be minimal. \\
+
+Parameter start_with should be a sequence of elements in gp.
+We start with these elements if they are given. \\
+
+Returns - used_elts: the elements in elts that are used to generate the image. \\
+
+- used_imgs: the images of the used elements in the group. \\
+
+- bad_elts: the elements the_map failed on. }
+    imgs := [];
+    bad_elts := [];
+    good_elts := [];
     for elt in elts do
         try
             img := the_map(elt);
-            if not img in sub<gp | used_imgs> then
-                Append(~used_elts, elt);
-                Append(~used_imgs, img);
-            end if;
+            Append(~imgs, img);
+            Append(~good_elts, elt);
         catch e
-            num_errors +:= 1;
+            Append(~bad_elts, elt);
         end try;
     end for;
-    print "Num errors: ", num_errors;
-    return used_elts, used_imgs;
+
+    used_indices := IndicesGeneratingSubgroup(imgs, gp : start_with := start_with);
+    return good_elts[used_indices], imgs[used_indices], bad_elts;
 end intrinsic;
 
 
@@ -142,9 +166,9 @@ intrinsic SimultaneousImagesInSubgroups(data1::., data2::.,
     { Computes the image of elts1 under map1 in gp1 and images of elts2 under
     map2 in gp2. Returns the elements in elts that are used to generate the
     image. The number of returned elements is thus the number of generators of
-    the subgroup of the image. If the group has elements of composite order, we
-    may return more elements, however. Each data consists of a map
-    (UserProgram), elts (SetIndx) and a group that the map maps the elts into.
+    the subgroup of the image. If the size of the group is composite, we
+    may return more elements. Each data consists of a map (UserProgram),
+    elts (SetIndx) and a group that the map maps the elts into.
     }
     map1 := data1[1];
     elts1 := data1[2];
@@ -171,6 +195,7 @@ intrinsic SimultaneousImagesInSubgroups(data1::., data2::.,
                     Append(~used_imgs1, img1);
                 end if;
             catch e
+                print e;
                 num_errors +:= 1;
             end try;
         end if;
@@ -256,6 +281,13 @@ end intrinsic;
 intrinsic Precision(pt::PtHyp) -> RngElt
     { Given a local point on a hyperelliptic curve, compute its precision. }
     precision := Precision([pt[i] : i in [1..3]]);
+    return precision;
+end intrinsic;
+
+
+intrinsic Precision(pt::SrfKumPt) -> RngElt
+    { Compute the precision of a local point on a Kummer surface. }
+    precision := Precision([pt[i] : i in [1..4]]);
     return precision;
 end intrinsic;
 
@@ -519,6 +551,29 @@ intrinsic RemoveMultipleFactors(poly::RngUPolElt) -> RngUPolElt
 end intrinsic;
 
 
+intrinsic NormalisePolynomialModuloSquares(f::RngUPolElt) -> RngUPolElt
+    { Given a polynomial f(x) over the rationals, with leading coefficient a, we divide by
+    the unique rational number b^2 such that c = a / b^2 is a squarefree integer. }
+    num := Numerator(LeadingCoefficient(f));
+    den := Denominator(LeadingCoefficient(f));
+    a_num, b_num := Squarefree(num);
+    a_den, b_den := Squarefree(den);
+
+    a := a_num * a_den;
+    b := b_num / b_den * a_den^2;
+    f_norm := f / b^2;
+    assert LeadingCoefficient(f) / LeadingCoefficient(f_norm) eq b^2;
+    return f_norm;
+end intrinsic;
+
+
+intrinsic SliceSequence(seq::SeqEnum, start::RngIntElt, step::RngIntElt) -> SeqEnum
+    { Slices the sequence, returning the subsequence of elements starting at start and
+    adding step each time.}
+    return seq[[start..#seq by step]];
+end intrinsic;
+
+
 intrinsic RationalsUpToHeight(H::RngIntElt, n::RngIntElt, specialise::SeqEnum)
     -> []
     { Returns all n-tuples of rational numbers up to height H. The variable
@@ -532,22 +587,28 @@ intrinsic RationalsUpToHeight(H::RngIntElt, n::RngIntElt, specialise::SeqEnum)
 end intrinsic;
 
 
-intrinsic RationalsUpToHeight(H::RngIntElt, n::RngIntElt) -> []
+intrinsic RationalsUpToHeight(H::RngIntElt, n::RngIntElt : include_zero := true, include_negatives := true) -> []
     { Returns all n-tuples of rational numbers up to height H. }
-    rationals := RationalsUpToHeight(H);
+    rationals := RationalsUpToHeight(H : include_zero := include_zero, include_negatives := include_negatives);
     product := CartesianProduct([rationals : i in [1..n]]);
     product := [[elt[i] : i in [1..n]] : elt in product];
     return product;
 end intrinsic;
 
 
-intrinsic RationalsUpToHeight(H::RngIntElt) -> []
+intrinsic RationalsUpToHeight(H::RngIntElt : include_zero := true, include_negatives := true) -> []
     { Returns all rational numbers up to height H. }
 
     farey := [t : t in FareySequence(H) | t ne 0];
     inv_farey := Reverse([1/t : t in farey | t ne 0 and t ne 1]);
-    positives := farey cat inv_farey;
-    return [0] cat [e * t : e in [1, -1], t in positives];
+    rationals := farey cat inv_farey;
+    if include_negatives then
+        rationals := [e * t : e in [1, -1], t in rationals];
+    end if;
+    if include_zero then
+        rationals := [0] cat rationals;
+    end if;
+    return rationals;
 end intrinsic;
 
 
@@ -581,6 +642,10 @@ intrinsic NumeratorTimesDenominator(elt::FldElt) -> RngElt
     R := Integers(K);
     num := Numerator(elt);
     den := Denominator(elt);
+
+    if elt eq 0 then
+        return 0;
+    end if;
     
     constant := elt / (num/den);
     return R!(constant * num * den);
@@ -617,7 +682,7 @@ intrinsic FactorModSquares(x::RngIntElt) -> SeqEnum
     { Factors the integer x modulo squares. Returns the list of prime
     divisors of x such that x is a square times the product of the list. }
     if x eq 0 then
-        return [];
+        return [0];
     end if;
 
     factors := [factor[1] : factor in Factorisation(x) | factor[2] mod 2 eq 1];
@@ -891,6 +956,12 @@ intrinsic IsGeometricallyIsomorphic(f1::RngUPolElt, f2::RngUPolElt) -> Bool
 end intrinsic;
 
 
+intrinsic IsIsomorphicHyperellipticCurves(f1::RngUPolElt, f2::RngUPolElt) -> Bool
+{ Returns whether or not the hyperelliptic curves y^2 = f1 and y^2 = f2 are isomorphic. }
+    return IsIsomorphic(HyperellipticCurve(f1), HyperellipticCurve(f2));
+end intrinsic;
+
+
 intrinsic MaxDegreeOfFactor(poly::RngUPolElt) -> RngIntElt
     { Computes the maximum degree of an irreducible factor of poly. }
     if poly eq 0 then
@@ -912,4 +983,13 @@ intrinsic PrintOneLine(seq::SeqEnum)
             printf ", ";
         end if;
     end for;
+end intrinsic;
+
+
+intrinsic TimeString() -> MonStgElt
+{ Returns the current time as a string, using the unix command 'date'. }
+    time_string := Pipe("date +%Y-%m-%d_%H-%M-%S", "");
+    // The last character of time_string is a new line.
+    l := #time_string;
+    return time_string[1..l-1];
 end intrinsic;
