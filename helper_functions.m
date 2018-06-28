@@ -292,6 +292,13 @@ intrinsic Precision(pt::SrfKumPt) -> RngElt
 end intrinsic;
 
 
+intrinsic Precision(elts::Tup) -> RngIntElt
+{ Returns the minimum precision of all elements in the tuple. Assumes all elements are
+from a p-adic field. }
+    return Precision([e : e in elts]);
+end intrinsic;
+
+
 intrinsic ComputeVectorsModM(len::RngElt, m::RngElt) -> SeqEnum
     { Computes all vectors of length len modulo m. }
     vectors := [[c] : c in [0..m-1]];
