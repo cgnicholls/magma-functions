@@ -877,7 +877,7 @@ intrinsic HyperellipticFlipMap(g::RngUPolElt, d::RngIntElt) -> RngUPolElt
     assert d ge n;
     P<x> := Parent(g);
     coeffs := [Coefficient(g, i) : i in [0..n]];
-    return x^(d-n) * P!Polynomial(P, Reverse(coeffs));
+    return x^(d-n) * P!Polynomial(Reverse(coeffs));
 end intrinsic;
 
 
